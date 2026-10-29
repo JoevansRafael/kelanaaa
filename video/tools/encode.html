@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8"><body>
+<script src="music.js"></script>
+<script>
+// WebCodecs side of the pipeline: soundtrack -> WAV + Opus, subframes -> blended frame -> H.264.
+const b64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+window.audio = async () => {
+  const buf = await renderMusic();
+  const { wav, peak, gain } = wavFromBuffer(buf);
+  const chunks = []; let desc = null;
+  const enc = new AudioEncoder({ output: (c, m) => { const d = new Uint8Array(c.byteLength); c.copyTo(d); chunks.push({ ts: c.timestamp, dur: c.duration, d: b64(d) }); if (m && m.decoderConfig && m.decoderConfig.description) desc = b64(new Uint8Array(m.decoderConfig.description)); }, error: e => { throw e; } });
+  enc.configure({ codec: 'opus', sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 });
+  const N = buf.length, L = buf.getChannelData(0), R = buf.getChannelData(1), F = 4800;
+  for (let i = 0; i < N; i += F) {
+    const n = Math.min(F, N - i), d = new Float32Array(n * 2); d.set(L.subarray(i, i + n).map(v => v * gain), 0); d.set(R.subarray(i, i + n).map(v => v * gain), n);
+    enc.encode(new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round(i / 48 * 1000), data: d }));
+  }
+  await enc.flush();
+  return { wav: b64(wav), peak, chunks, desc };
+};
+let venc, vout = [], vdesc = null, cv, g;
+window.vinit = async (bitrate) => {
+  cv = new OffscreenCanvas(1920, 1080); g = cv.getContext('2d', { alpha: false });
+  venc = new VideoEncoder({ output: (c, m) => { const d = new Uint8Array(c.byteLength); c.copyTo(d); vout.push({ ts: c.timestamp, key: c.type === 'key', d: b64(d) }); if (m && m.decoderConfig && m.decoderConfig.description) vdesc = b64(new Uint8Array(m.decoderConfig.description)); }, error: e => { throw e; } });
+  venc.configure({ codec: 'avc1.640032', width: 1920, height: 1080, bitrate, framerate: 60, bitrateMode: 'variable', latencyMode: 'quality', avc: { format: 'avc' } });
+};
+// blend 3 subframes (running average) and encode
+window.vframe = async (i, urls) => {
+  const bms = await Promise.all(urls.map(u => fetch(u).then(r => r.blob()).then(b => createImageBitmap(b))));
+  g.globalAlpha = 1; g.drawImage(bms[0], 0, 0);
+  for (let k = 1; k < bms.length; k++) { g.globalAlpha = 1 / (k + 1); g.drawImage(bms[k], 0, 0); }
+  bms.forEach(b => b.close());
+  const f = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / 60), duration: Math.round(1e6 / 60) });
+  venc.encode(f, { keyFrame: i % 120 === 0 }); f.close();
+  while (venc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 2));
+  const o = vout; vout = []; return o;
+};
+window.vflush = async () => { await venc.flush(); const o = vout; vout = []; return { chunks: o, desc: vdesc }; };
+</script></body>
