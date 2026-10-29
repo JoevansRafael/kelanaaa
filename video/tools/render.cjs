@@ -16,7 +16,7 @@ async function renderFrames(browser) {
   await Promise.all([...Array(W)].map(async () => {
     const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
     const p = await ctx.newPage(); p.on('pageerror', e => console.log('PAGEERROR', e.message));
-    await p.goto('file://' + path.join(ROOT, 'kelana.html')); await p.evaluate(() => window.__ready);
+    await p.goto('file://' + path.join(ROOT, process.env.PAGE || 'kelana.html')); await p.evaluate(() => window.__ready);
     while (next < todo.length) {
       const i = todo[next++];
       for (let k = 0; k < SUBS; k++) {
@@ -37,9 +37,9 @@ async function encode(browser) {
   console.log('rendering soundtrack');
   const a = await p.evaluate(() => window.audio());
   fs.mkdirSync(path.join(ROOT, 'out'), { recursive: true });
-  fs.writeFileSync(path.join(ROOT, 'out/kelana_soundtrack.wav'), Buffer.from(a.wav, 'base64'));
+  fs.writeFileSync(path.join(ROOT, 'out/' + (process.env.OUT || 'kelana') + '_soundtrack.wav'), Buffer.from(a.wav, 'base64'));
   console.log('wav written, peak', a.peak.toFixed(3), 'opus packets', a.chunks.length);
-  await p.evaluate(() => window.vinit(18e6));
+  await p.evaluate(b => window.vinit(b), +(process.env.BITRATE || 18e6));
   const video = [];
   for (let i = 0; i < NF; i++) {
     const urls = [...Array(SUBS)].map((_, k) => 'file://' + subPath(i, k));
@@ -53,7 +53,7 @@ async function encode(browser) {
   for (let i = 1; i < video.length; i++) if (video[i].ts <= video[i - 1].ts) throw new Error('non-monotonic timestamps at ' + i);
   const audio = a.chunks.map(c => ({ dur: c.dur, d: Buffer.from(c.d, 'base64') }));
   const mp4 = mux({ width: 1920, height: 1080, fps: FPS, video, avcC: Buffer.from(fl.desc, 'base64'), audio, opusHead: a.desc ? Buffer.from(a.desc, 'base64') : null });
-  fs.writeFileSync(path.join(ROOT, 'out/kelana_explainer.mp4'), mp4);
+  fs.writeFileSync(path.join(ROOT, 'out/' + (process.env.OUT || 'kelana') + '_explainer.mp4'), mp4);
   console.log('mp4 written', (mp4.length / 1e6).toFixed(1), 'MB, video samples', video.length, 'keyframes', video.filter(v => v.key).length);
 }
 

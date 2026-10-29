@@ -6,5 +6,5 @@ const r=await p.evaluate(async(src)=>{const v=document.createElement('video');v.
 await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej('decode error')});
 const info={duration:v.duration,width:v.videoWidth,height:v.videoHeight};
 v.currentTime=50;await new Promise(r=>v.onseeked=r);await v.play();await new Promise(r=>setTimeout(r,2500));
-info.audioBytesDecoded=v.webkitAudioDecodedByteCount;info.videoBytesDecoded=v.webkitVideoDecodedByteCount;info.droppedFrames=v.getVideoPlaybackQuality().droppedVideoFrames;return info;},'file://'+path.resolve(__dirname,'../out/kelana_explainer.mp4'));
+info.audioBytesDecoded=v.webkitAudioDecodedByteCount;info.videoBytesDecoded=v.webkitVideoDecodedByteCount;info.droppedFrames=v.getVideoPlaybackQuality().droppedVideoFrames;return info;},'file://'+path.resolve(__dirname,'../out/' + (process.env.OUT || 'kelana') + '_explainer.mp4'));
 console.log(JSON.stringify(r));await b.close();})();

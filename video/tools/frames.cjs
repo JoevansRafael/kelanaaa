@@ -4,12 +4,12 @@ const { launch, path } = require('./pw.cjs');
 (async () => {
   const [outDir, spec, scale = '0.5'] = process.argv.slice(2);
   fs.mkdirSync(outDir, { recursive: true });
-  const times = spec === 'beats' ? Array.from({ length: 112 }, (_, i) => i * 0.5 + 0.25) : spec.split(',').map(Number);
+  const times = spec === 'beats' ? Array.from({ length: +(process.env.NB || 112) }, (_, i) => i * 0.5 + 0.25) : spec.split(',').map(Number);
   const b = await launch();
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
   p.on('console', m => console.log('page:', m.text()));
   p.on('pageerror', e => console.log('PAGEERROR', e.message));
-  await p.goto('file://' + path.resolve(__dirname, '../kelana.html'));
+  await p.goto('file://' + path.resolve(__dirname, '../' + (process.env.PAGE || 'kelana.html')));
   await p.evaluate(() => window.__ready);
   for (const t of times) {
     await p.evaluate(t => window.seek(t), t);
